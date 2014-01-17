@@ -334,7 +334,7 @@ class Timeseries(object):
     '''
     raise NotImplementedError()
 
-  def insert(self, name, value, timestamp=None, intervals=0):
+  def insert(self, name, value, timestamp=None, intervals=0, **kwargs):
     '''
     Insert a value for the timeseries "name". For each interval in the
     configuration, will insert the value into a bucket for the interval
@@ -352,6 +352,12 @@ class Timeseries(object):
     '''
     if not timestamp:
       timestamp = time.time()
+
+    if isinstance(value, (list,tuple,set)):
+      if self._write_func:
+        value = [ self._write_func(v) for v in value ]
+      return self._batch_insert(name, value, timestamp, intervals, **kwargs)
+
     if self._write_func:
       value = self._write_func(value)
 
@@ -361,9 +367,17 @@ class Timeseries(object):
     # TODO: document how the data is stored.
     # TODO: better abstraction for "intervals" processing rather than in each implementation
 
-    self._insert( name, value, timestamp, intervals )
+    self._insert( name, value, timestamp, intervals, **kwargs )
 
-  def _insert(self, name, value, timestamp, intervals):
+  def _batch_insert(self, name, values, timestamp, intervals, **kwargs):
+    '''
+    Support for batch insert. Default implementation is non-optimized and
+    is a simple loop over values.
+    '''
+    for value in values:
+      self._insert( name, value, timestamp, intervals, **kwargs )
+
+  def _insert(self, name, value, timestamp, intervals, **kwargs):
     '''
     Support for the insert per type of series.
     '''

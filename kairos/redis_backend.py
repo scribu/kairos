@@ -88,12 +88,14 @@ class RedisBackend(Timeseries):
 
     return rval
 
-  def _insert(self, name, value, timestamp, intervals):
+  def _insert(self, name, value, timestamp, intervals, **kwargs):
     '''
     Insert the value.
     '''
-    pipe = self._client.pipeline(transaction=False)
-    # TODO: apply the prefix if we're using one.
+    if 'pipeline' in kwargs:
+      pipe = kwargs.get('pipeline')
+    else:
+      pipe = self._client.pipeline(transaction=False)
 
     for interval,config in self._intervals.iteritems():
       self._insert_data(name, value, timestamp, interval, config, pipe)
@@ -109,7 +111,8 @@ class RedisBackend(Timeseries):
           self._insert_data(name, value, i_timestamp, interval, config, pipe)
           steps -= 1
 
-    pipe.execute()
+    if 'pipeline' not in kwargs:
+      pipe.execute()
 
   def _insert_data(self, name, value, timestamp, interval, config, pipe):
     '''Helper to insert data into redis'''
