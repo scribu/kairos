@@ -88,6 +88,27 @@ class RedisBackend(Timeseries):
 
     return rval
 
+  def _batch_insert(self, inserts, intervals, **kwargs):
+    '''
+    Specialized batch insert
+    '''
+    if 'pipeline' in kwargs:
+      pipe = kwargs.get('pipeline')
+      own_pipe = False
+    else:
+      pipe = self._client.pipeline(transaction=False)
+      kwargs['pipeline'] = pipe
+      own_pipe = True
+
+    for timestamp,names in inserts.iteritems():
+      for name,values in names.iteritems():
+        for value in values:
+          # TODO: support config param to flush the pipe every X inserts
+          self._insert( name, value, timestamp, intervals, **kwargs )
+
+    if own_pipe:
+      kwargs['pipeline'].execute()
+
   def _insert(self, name, value, timestamp, intervals, **kwargs):
     '''
     Insert the value.

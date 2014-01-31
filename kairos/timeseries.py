@@ -334,6 +334,32 @@ class Timeseries(object):
     '''
     raise NotImplementedError()
 
+  def batch_insert(self, inserts, intervals=0, **kwargs):
+    '''
+    Perform a bulk insert. The format of the inserts must be:
+
+    {
+      timestamp : {
+        name: [ values ],
+        ...
+      },
+      ...
+    }
+
+    If the timestamp should be auto-generated, then the primary key
+    should be None.
+
+    Backends can implement this in any number of ways, the default being to
+    perform a single insert for each value.
+    '''
+    if None in inserts:
+      inserts[ time.time() ] = inserts.pop(None)
+    if self._write_func:
+      for timestamp,names in inserts.iteritems():
+        for name,values in names.iteritems():
+          names[name] = [ self._write_func(v) for v in values ]
+    self._batch_insert(inserts, intervals, **kwargs)
+
   def insert(self, name, value, timestamp=None, intervals=0, **kwargs):
     '''
     Insert a value for the timeseries "name". For each interval in the
@@ -356,7 +382,7 @@ class Timeseries(object):
     if isinstance(value, (list,tuple,set)):
       if self._write_func:
         value = [ self._write_func(v) for v in value ]
-      return self._batch_insert(name, value, timestamp, intervals, **kwargs)
+      return self._batch_insert({timestamp:{name:value}}, intervals, **kwargs)
 
     if self._write_func:
       value = self._write_func(value)
@@ -369,13 +395,15 @@ class Timeseries(object):
 
     self._insert( name, value, timestamp, intervals, **kwargs )
 
-  def _batch_insert(self, name, values, timestamp, intervals, **kwargs):
+  def _batch_insert(self, inserts, intervals, **kwargs):
     '''
     Support for batch insert. Default implementation is non-optimized and
     is a simple loop over values.
     '''
-    for value in values:
-      self._insert( name, value, timestamp, intervals, **kwargs )
+    for timestamp,names in inserts.iteritems():
+      for name,values in names.iteritems():
+        for value in values:
+          self._insert( name, value, timestamp, intervals, **kwargs )
 
   def _insert(self, name, value, timestamp, intervals, **kwargs):
     '''

@@ -96,8 +96,10 @@ class MongoBackend(Timeseries):
 
     return rval
 
+  def _batch_insert(self, inserts, intervals, **kwargs):
+    pass
 
-  def _insert(self, name, value, timestamp, intervals):
+  def _insert(self, name, value, timestamp, intervals, **kwargs):
     '''
     Insert the new value.
     '''
@@ -131,7 +133,7 @@ class MongoBackend(Timeseries):
           self._insert_data(name, value, i_timestamp, interval, config)
           steps -= 1
 
-  def _insert_data(self, name, value, timestamp, interval, config):
+  def _insert_data(self, name, value, timestamp, interval, config, dry_run=False):
     '''Helper to insert data into mongo.'''
     insert = {'name':name, 'interval':config['i_calc'].to_bucket(timestamp)}
     if not config['coarse']:
@@ -154,7 +156,9 @@ class MongoBackend(Timeseries):
     self._insert_type( insert, value )
 
     # TODO: use write preference settings if we have them
-    self._client[interval].update( query, insert, upsert=True, check_keys=False )
+    if not dry_run:
+      self._client[interval].update( query, insert, upsert=True, check_keys=False )
+    return query, insert
 
   def _get(self, name, interval, config, timestamp, **kws):
     '''

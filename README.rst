@@ -367,6 +367,18 @@ to ``1``.
 
 For the ``gauge`` type, ``value`` can be anything and it will be stored as-is.
 
+Redis
+#####
+
+Redis supports an additional keyword argument, ``pipeline``, to give the caller
+control over batches of commands. If ``pipeline`` is supplied, the ``execute``
+method will not be called and it is up to the caller to do so.
+
+bulk_insert
+***********
+
+TODO: Document how this works. Also, the final name.
+
 
 Meta Data
 ---------

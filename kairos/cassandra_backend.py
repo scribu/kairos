@@ -152,7 +152,7 @@ class CassandraBackend(Timeseries):
       # do not return connection to the pool.
       pass
 
-  def _insert(self, name, value, timestamp, intervals):
+  def _insert(self, name, value, timestamp, intervals, **kwargs):
     '''
     Insert the new value.
     '''
