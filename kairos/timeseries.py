@@ -334,7 +334,7 @@ class Timeseries(object):
     '''
     raise NotImplementedError()
 
-  def batch_insert(self, inserts, intervals=0, **kwargs):
+  def bulk_insert(self, inserts, intervals=0, **kwargs):
     '''
     Perform a bulk insert. The format of the inserts must be:
 

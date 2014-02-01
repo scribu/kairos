@@ -97,7 +97,37 @@ class MongoBackend(Timeseries):
     return rval
 
   def _batch_insert(self, inserts, intervals, **kwargs):
-    pass
+    '''
+    Batch insert implementation.
+    '''
+    updates = {}
+    # TODO support flush interval
+    for interval,config in self._intervals.items():
+      updates[interval] = {}
+      for timestamp,names in inserts.iteritems():
+        for name,values in names.iteritems():
+          for value in values:
+            query,insert = self._insert_data(name, value, timestamp, interval, config, dry_run=False)
+            updates[interval].setdefault('query',query)
+            updates[interval].setdefault('insert',{})
+
+            # The below logic could be re-written depending on what can be 
+            # assumed about a value manipulation mixed with the rest of the
+            # $set calls. Not sure that there'd be significant improvement.
+
+            # find the spec for the value update and batch it with existing calls.
+            for value_type,spec in insert:
+              # A very ugly way to capture hist
+              if 'value' in spec:
+                # pop so that $set doesn't include the value manipulation too
+                existing = updates[interval]['insert'].get(value_type,{}).pop('value',None)
+                value = self._batch(spec, existing)
+                break
+
+            # the remaining spec for the non-value portions
+            updates[interval]['insert'].setdefault('$set', insert['$set'])
+            updates[interval]['insert'].setdefault(value_type,{})['value'] = value
+            
 
   def _insert(self, name, value, timestamp, intervals, **kwargs):
     '''
@@ -133,7 +163,7 @@ class MongoBackend(Timeseries):
           self._insert_data(name, value, i_timestamp, interval, config)
           steps -= 1
 
-  def _insert_data(self, name, value, timestamp, interval, config, dry_run=False):
+  def _insert_data(self, name, value, timestamp, interval, config, dry_run=False, **kwargs):
     '''Helper to insert data into mongo.'''
     insert = {'name':name, 'interval':config['i_calc'].to_bucket(timestamp)}
     if not config['coarse']:
@@ -251,20 +281,44 @@ class MongoBackend(Timeseries):
 
 class MongoSeries(MongoBackend, Series):
 
+  def _batch(self, value, existing):
+    if not existing:
+      return {'$each' : [value] }
+    existing['$each'].append(value)
+    return existing
+
   def _insert_type(self, spec, value):
     spec['$push'] = {'value':value}
 
 class MongoHistogram(MongoBackend, Histogram):
 
+  def _batch(self, values, existing):
+    if not existing:
+      return values
+    for value,incr in values.items():
+      existing[value] = existing.get(value,0) + incr
+    return existing
+
   def _insert_type(self, spec, value):
-    spec['$inc'] = {'value.%s'%(value): 1}
+    # Use nested format to make batch insert logic simpler
+    #spec['$inc'] = {'value.%s'%(value): 1}
+    spec['$inc'] = {'value':{value: 1}}
 
 class MongoCount(MongoBackend, Count):
+
+  def _batch(self, value, existing):
+    if not existing:
+      return value
+    return existing+value
 
   def _insert_type(self, spec, value):
     spec['$inc'] = {'value':value}
 
 class MongoGauge(MongoBackend, Gauge):
+
+  def _batch(self, value, existing):
+    # always the last value to be seen
+    return value
 
   def _insert_type(self, spec, value):
     spec['$set']['value'] = value
